@@ -1,19 +1,21 @@
 const express = require("express");
 const connectDB = require("./config/db");
 const SOSAlert = require("./models/SOSAlert");
+const adminRoutes = require("./routes/adminRoutes");
 
 const app = express();
 
+// connect database
 connectDB();
 
+// middleware
 app.use(express.json());
 
-let sosAlerts = []; // temporary storage
-
+// CORS
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "http://localhost:5173");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
   if (req.method === "OPTIONS") {
     return res.sendStatus(200);
@@ -22,14 +24,16 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json());
+// ADMIN ROUTES
+app.use("/api/admin", adminRoutes);
 
+// GET all SOS
 app.get("/api/sos", async (req, res) => {
   const alerts = await SOSAlert.find().sort({ createdAt: -1 });
   res.json(alerts);
 });
 
-// SAVE SOS
+// CREATE SOS
 app.post("/api/sos", async (req, res) => {
   try {
     const alert = await SOSAlert.create({
@@ -38,7 +42,6 @@ app.post("/api/sos", async (req, res) => {
       longitude: req.body.longitude,
     });
 
-    // emit real-time event
     global.io.emit("newSOS", alert);
 
     res.json({
@@ -50,16 +53,11 @@ app.post("/api/sos", async (req, res) => {
   }
 });
 
-// GET ALL SOS
-app.get("/api/sos", (req, res) => {
-  res.json(sosAlerts);
-});
-
+// DELETE SOS
 app.delete("/api/sos", async (req, res) => {
   try {
     await SOSAlert.deleteMany({});
 
-    // notify dashboard
     global.io.emit("alertsCleared");
 
     res.json({
@@ -70,4 +68,5 @@ app.delete("/api/sos", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 module.exports = app;

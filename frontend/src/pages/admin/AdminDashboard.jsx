@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { io } from "socket.io-client";
 import SOSMap from "../../components/map/SOSMap";
+import api from "../../services/api";
 
 const socket = io("http://localhost:5001");
 
@@ -10,6 +11,16 @@ export default function AdminDashboard() {
   const [emergency, setEmergency] = useState(false);
 
   const audioRef = useRef(null);
+
+  // get JWT token
+  const token = localStorage.getItem("token");
+
+  // axios config with auth
+  const axiosConfig = {
+    headers: {
+      Authorization: token,
+    },
+  };
 
   useEffect(() => {
     audioRef.current = new Audio("/sounds/siren.ogg");
@@ -20,7 +31,8 @@ export default function AdminDashboard() {
   };
 
   const stopAlarm = () => {
-    audioRef.current?.pause();
+    if (!audioRef.current) return;
+    audioRef.current.pause();
     audioRef.current.currentTime = 0;
   };
 
@@ -39,6 +51,7 @@ export default function AdminDashboard() {
 
     socket.on("alertsCleared", () => {
       setAlerts([]);
+
       stopAlarm();
     });
 
@@ -48,19 +61,40 @@ export default function AdminDashboard() {
     };
   }, []);
 
+  // LOAD ALERTS (WITH TOKEN)
   const loadAlerts = async () => {
-    const res = await axios.get("http://localhost:5001/api/sos");
-    setAlerts(res.data);
-  };
+    try {
+      const res = await api.get("/sos");
 
+      setAlerts(res.data);
+    } catch (error) {
+      if (error.response?.status === 401) {
+        localStorage.removeItem("token");
+        window.location.href = "/admin-login";
+      }
+    }
+  };
+  // CLEAR ALERTS (WITH TOKEN)
   const clearAlerts = async () => {
     if (!window.confirm("Clear alerts?")) return;
 
-    await axios.delete("http://localhost:5001/api/sos");
+    try {
+      await api.delete("/sos");
 
-    setAlerts([]);
+      setAlerts([]);
+      stopAlarm();
+    } catch (error) {
+      if (error.response?.status === 401) {
+        localStorage.removeItem("token");
+        window.location.href = "/admin-login";
+      }
+    }
+  };
+  // LOGOUT FIXED
+  const logout = () => {
+    localStorage.removeItem("token");
 
-    stopAlarm();
+    window.location.href = "/admin-login";
   };
 
   return (
@@ -71,9 +105,12 @@ export default function AdminDashboard() {
           <div>{alerts.length} Active Alerts</div>
         </div>
 
-        <div>
+        <div style={{ display: "flex", gap: "10px" }}>
           <button onClick={stopAlarm}>Stop Alarm</button>
+
           <button onClick={clearAlerts}>Clear Alerts</button>
+
+          <button onClick={logout}>Logout</button>
         </div>
       </div>
 
@@ -86,16 +123,17 @@ export default function AdminDashboard() {
       <div style={styles.grid}>
         {alerts.map((alert) => (
           <div key={alert._id} style={styles.card}>
-            <div>Student: {alert.studentId}</div>
-
             <div>
-              Location:
-              {alert.latitude.toFixed(5)},{alert.longitude.toFixed(5)}
+              <b>Student:</b> {alert.studentId}
             </div>
 
             <div>
-              Time:
-              {new Date(alert.createdAt).toLocaleString()}
+              <b>Location:</b> {alert.latitude.toFixed(5)},{" "}
+              {alert.longitude.toFixed(5)}
+            </div>
+
+            <div>
+              <b>Time:</b> {new Date(alert.createdAt).toLocaleString()}
             </div>
           </div>
         ))}
@@ -107,21 +145,22 @@ export default function AdminDashboard() {
 const styles = {
   page: {
     width: "100%",
-    padding: "0",
-    margin: "0",
+    margin: 0,
     fontFamily: "system-ui",
   },
 
   header: {
     display: "flex",
     justifyContent: "space-between",
-    padding: "10px 20px",
+    padding: "12px 20px",
+    borderBottom: "1px solid #ddd",
   },
 
   emergency: {
-    background: "red",
+    background: "#dc2626",
     color: "white",
-    padding: "10px",
+    padding: "10px 20px",
+    fontWeight: "bold",
   },
 
   map: {
@@ -131,13 +170,17 @@ const styles = {
 
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))",
+    gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))",
     gap: "10px",
     padding: "10px",
   },
 
   card: {
-    border: "1px solid #ccc",
-    padding: "10px",
+    border: "1px solid #ddd",
+    borderRadius: "6px",
+    padding: "12px",
+    background: "#000000",
+    color: "red",
+    fontSize: "1.4rem",
   },
 };
