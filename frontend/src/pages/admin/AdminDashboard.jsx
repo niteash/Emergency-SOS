@@ -39,6 +39,25 @@ export default function AdminDashboard() {
   useEffect(() => {
     loadAlerts();
 
+    socket.on("statusUpdated", (updatedAlert) => {
+      if (!updatedAlert || !updatedAlert._id) return;
+
+      setAlerts((prev) =>
+        prev.map((alert) =>
+          alert && alert._id === updatedAlert._id ? updatedAlert : alert,
+        ),
+      );
+    });
+    socket.on("locationUpdated", (updatedAlert) => {
+      if (!updatedAlert || !updatedAlert._id) return;
+
+      setAlerts((prev) =>
+        prev.map((alert) =>
+          alert && alert._id === updatedAlert._id ? updatedAlert : alert,
+        ),
+      );
+    });
+
     socket.on("newSOS", (alert) => {
       playAlarm();
 
@@ -58,6 +77,8 @@ export default function AdminDashboard() {
     return () => {
       socket.off("newSOS");
       socket.off("alertsCleared");
+      socket.off("statusUpdated");
+      socket.off("locationUpdated");
     };
   }, []);
 
@@ -97,6 +118,18 @@ export default function AdminDashboard() {
     window.location.href = "/admin-login";
   };
 
+  const updateStatus = async (id, status) => {
+    try {
+      await api.put(`/sos/${id}/status`, {
+        status,
+      });
+
+      loadAlerts();
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
   return (
     <div style={styles.page}>
       <div style={styles.header}>
@@ -117,23 +150,55 @@ export default function AdminDashboard() {
       {emergency && <div style={styles.emergency}>NEW EMERGENCY ALERT</div>}
 
       <div style={styles.map}>
-        <SOSMap alerts={alerts} />
+        <SOSMap alerts={alerts.filter((a) => a.latitude && a.longitude)} />
       </div>
 
       <div style={styles.grid}>
-        {alerts.map((alert) => (
+        {alerts.filter(Boolean).map((alert) => (
           <div key={alert._id} style={styles.card}>
+            <div>Name: {alert.student?.name || "Unknown"}</div>
+
+            <div>Phone: {alert.student?.phone || "Unknown"}</div>
+
+            <div>Hostel: {alert.student?.hostel || "Unknown"}</div>
+
+            <div>Blood Group: {alert.student?.bloodGroup || "Unknown"}</div>
+
             <div>
-              <b>Student:</b> {alert.studentId}
+              Location:
+              {alert.latitude?.toFixed(5)}, {alert.longitude?.toFixed(5)}
             </div>
 
             <div>
-              <b>Location:</b> {alert.latitude.toFixed(5)},{" "}
-              {alert.longitude.toFixed(5)}
+              Time:
+              {new Date(alert.createdAt).toLocaleString()}
             </div>
 
             <div>
-              <b>Time:</b> {new Date(alert.createdAt).toLocaleString()}
+              <b>Status:</b>
+              <span
+                style={{
+                  marginLeft: 8,
+                  color:
+                    alert.status === "PENDING"
+                      ? "red"
+                      : alert.status === "RESPONDING"
+                        ? "orange"
+                        : "green",
+                }}
+              >
+                {alert.status}
+              </span>
+            </div>
+
+            <div style={{ marginTop: 8 }}>
+              <button onClick={() => updateStatus(alert._id, "RESPONDING")}>
+                Responding
+              </button>
+
+              <button onClick={() => updateStatus(alert._id, "RESOLVED")}>
+                Resolved
+              </button>
             </div>
           </div>
         ))}

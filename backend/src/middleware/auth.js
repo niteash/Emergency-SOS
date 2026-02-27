@@ -1,19 +1,28 @@
 const jwt = require("jsonwebtoken");
 
-module.exports = function (req, res, next) {
-  const token = req.headers.authorization;
+const JWT_SECRET = "campusshieldsecret";
 
-  if (!token) {
-    return res.status(401).json({ message: "Access denied. No token." });
-  }
-
+module.exports = (req, res, next) => {
   try {
-    const decoded = jwt.verify(token, "secretkey");
+    const header = req.headers.authorization;
+
+    if (!header) {
+      return res.status(401).json({ message: "No token" });
+    }
+
+    // remove "Bearer "
+    const token = header.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({ message: "Invalid token format" });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
 
     req.admin = decoded;
 
     next();
   } catch (error) {
-    return res.status(401).json({ message: "Invalid token" });
+    return res.status(401).json({ message: "Token invalid" });
   }
 };
